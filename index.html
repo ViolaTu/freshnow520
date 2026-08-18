@@ -1,0 +1,1355 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>現鮮訂購單</title>
+  <style>
+    /* ----------------------------------------------------
+       基本設定 & 變數 (適老化：大字體、高對比)
+    ---------------------------------------------------- */
+    :root {
+      --primary-color: #FFEEDD;      /* 主色調：暖杏色 */
+      --primary-dark: #F0D9BE;       /* 懸停/加深色 */
+      --on-primary: #1E3A8A;         /* 淺色底上的文字：深藍色（高對比度） */
+      --on-primary-muted: rgba(30, 58, 138, 0.75);
+      --text-main: #1A365D;          /* 白卡片上的主要文字：深藍色（高對比度） */
+      --text-muted: #4A5568;         /* 次要文字 */
+      --page-bg: #FFEEDD;            /* 全局背景：暖杏色 */
+      --card-bg: #FFFFFF;            /* 卡片背景 */
+      --accent-price: #C53030;       /* 金額強調色：深紅色 */
+      --border-color: #CBD5E0;
+      --status-live: #1E5A3A;
+      --status-fallback: #92400E;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Microsoft JhengHei", sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      background-color: var(--page-bg);
+      color: var(--text-main);
+      padding-top: 210px; /* 為頂部固定 Header 留空間，JS 會依實際高度動態校正 */
+      padding-bottom: 90px;  /* 為底部固定購物車留空間 */
+      font-size: 18px;       /* 基礎字體加大 */
+      line-height: 1.5;
+    }
+
+    /* ----------------------------------------------------
+       1. 頂部大分頁導覽列 (Tabs & Header)
+    ---------------------------------------------------- */
+    .top-header-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      background-color: #FFFFFF;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+
+    .header-title {
+      background-color: var(--primary-color);
+      color: var(--on-primary);
+      text-align: center;
+      padding: 12px 15px;
+      font-size: 19px;
+      font-weight: bold;
+      border-bottom: 2px solid var(--primary-dark);
+    }
+
+    .header-contact-info {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 4px 16px;
+      font-size: 11px;
+      font-weight: normal;
+      margin-top: 8px;
+      color: var(--on-primary-muted);
+    }
+
+    .header-contact-info b { color: var(--on-primary); font-weight: 600; }
+
+    .data-status {
+      margin-top: 10px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      font-weight: normal;
+      color: var(--on-primary-muted);
+      padding: 4px 12px;
+      border: 1px solid rgba(30, 58, 138, 0.3);
+      border-radius: 999px;
+    }
+
+    .data-status::before {
+      content: "";
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: currentColor;
+      flex: none;
+    }
+
+    .data-status.is-live { color: var(--status-live); }
+    .data-status.is-fallback { color: var(--status-fallback); }
+
+    /* 滾動頁籤列 */
+    .tab-nav {
+      display: flex;
+      justify-content: center;
+      overflow-x: auto;
+      white-space: nowrap;
+      background-color: #FFFFFF;
+      border-bottom: 2px solid var(--border-color);
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .tab-nav::-webkit-scrollbar {
+      display: none; /* 隱藏滾動條 */
+    }
+
+    .tab-btn {
+      flex: 0 0 auto;
+      padding: 13px 22px;
+      font-size: 17px;
+      font-weight: bold;
+      color: var(--text-main);
+      background-color: #FFFFFF;
+      border: none;
+      border-bottom: 4px solid transparent;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .tab-btn.active {
+      background-color: var(--primary-color);
+      color: var(--on-primary);
+      border-bottom: 4px solid var(--primary-dark);
+    }
+
+    /* ----------------------------------------------------
+       2. 商品列表區塊 (適老化設計)
+    ---------------------------------------------------- */
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 15px;
+    }
+
+    .notice-card {
+      background: var(--card-bg);
+      border-radius: 12px;
+      padding: 14px 18px;
+      margin-bottom: 14px;
+      font-size: 12px;
+      color: var(--text-muted);
+      display: grid;
+      gap: 4px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.04);
+    }
+
+    .notice-card strong { color: var(--text-main); font-weight: 700; }
+
+    .loading-text {
+      text-align: center;
+      padding: 40px;
+      font-size: 20px;
+      color: var(--on-primary);
+      font-weight: bold;
+    }
+
+    .product-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .product-item {
+      background: var(--card-bg);
+      border: 2px solid var(--border-color);
+      border-radius: 12px;
+      padding: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.04);
+    }
+
+    /* 商品資訊與按鈕緊貼，避免橫向拉太遠 */
+    .product-info {
+      flex: 1;
+      min-width: 0; /* 防止文字溢出 */
+    }
+
+    .product-name {
+      font-size: 17px;
+      font-weight: bold;
+      color: var(--text-main);
+      word-break: break-word;
+      line-height: 1.3;
+    }
+
+    .product-spec {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    .product-price {
+      font-size: 17px;
+      font-weight: bold;
+      color: var(--accent-price);
+      margin-top: 4px;
+    }
+
+    /* 數量操作按鈕 (大觸控區) */
+    .quantity-control {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background-color: #EDF2F7;
+      padding: 4px;
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+      flex-shrink: 0;
+    }
+
+    .btn-qty {
+      width: 48px;
+      height: 48px;
+      font-size: 26px;
+      font-weight: bold;
+      border: none;
+      background-color: #FFFFFF;
+      color: var(--text-main);
+      border-radius: 6px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      user-select: none;
+    }
+
+    .btn-qty:active {
+      background-color: var(--primary-color);
+      color: var(--on-primary);
+    }
+
+    .qty-display {
+      width: 40px;
+      text-align: center;
+      font-size: 22px;
+      font-weight: bold;
+      color: var(--text-main);
+    }
+
+    /* ----------------------------------------------------
+       3. 底部固定購物車列
+    ---------------------------------------------------- */
+    .cart-bar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      min-height: 80px;
+      background-color: #FFFFFF;
+      border-top: 2px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 18px;
+      padding: 10px 20px;
+      box-shadow: 0 -4px 12px rgba(0,0,0,0.1);
+      z-index: 99;
+    }
+
+    .cart-summary {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .cart-count {
+      font-size: 16px;
+      color: var(--text-muted);
+    }
+
+    .cart-total {
+      font-size: 22px;
+      font-weight: bold;
+      color: var(--accent-price);
+    }
+
+    .btn-checkout {
+      background-color: var(--primary-color);
+      color: var(--on-primary);
+      border: 2px solid var(--primary-dark);
+      padding: 12px 24px;
+      font-size: 20px;
+      font-weight: bold;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: background-color 0.2s;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.15);
+    }
+
+    .btn-checkout:active {
+      background-color: var(--primary-dark);
+    }
+
+    .btn-checkout:disabled {
+      background-color: #E2E8F0;
+      color: #A0AEC0;
+      border-color: #CBD5E0;
+      cursor: not-allowed;
+    }
+
+    /* ----------------------------------------------------
+       4. 填寫資料對話框 (Modal)
+    ---------------------------------------------------- */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: rgba(0,0,0,0.6);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      padding: 15px;
+    }
+
+    .modal-overlay.active {
+      display: flex;
+    }
+
+    .modal-card {
+      background-color: #FFFFFF;
+      width: 100%;
+      max-width: 500px;
+      max-height: 90vh;
+      border-radius: 16px;
+      overflow-y: auto;
+      padding: 24px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 2px solid var(--primary-color);
+      padding-bottom: 12px;
+      margin-bottom: 20px;
+    }
+
+    .modal-title {
+      font-size: 22px;
+      font-weight: bold;
+      color: var(--text-main);
+    }
+
+    .btn-close {
+      background: none;
+      border: none;
+      font-size: 28px;
+      font-weight: bold;
+      color: var(--text-muted);
+      cursor: pointer;
+      padding: 0 10px;
+    }
+
+    .form-group {
+      margin-bottom: 18px;
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 18px;
+      font-weight: bold;
+      margin-bottom: 6px;
+      color: var(--text-main);
+    }
+
+    .form-group label .required {
+      color: red;
+    }
+
+    .form-control {
+      width: 100%;
+      padding: 12px 14px;
+      font-size: 18px;
+      border: 2px solid var(--border-color);
+      border-radius: 8px;
+      background-color: #F8FAFC;
+      color: var(--text-main);
+    }
+
+    .form-control:focus {
+      outline: none;
+      border-color: var(--primary-color);
+      background-color: #FFFFFF;
+    }
+
+    .shipping-hint {
+      font-size: 14px;
+      color: var(--text-muted);
+      margin-top: 6px;
+    }
+
+    .btn-submit {
+      width: 100%;
+      background-color: var(--primary-color);
+      color: var(--on-primary);
+      border: 2px solid var(--primary-dark);
+      padding: 16px;
+      font-size: 22px;
+      font-weight: bold;
+      border-radius: 10px;
+      cursor: pointer;
+      margin-top: 10px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+
+    .btn-submit:active {
+      background-color: var(--primary-dark);
+    }
+
+    /* ----------------------------------------------------
+       5. 訂購內容確認彈窗 (購物車確認)
+    ---------------------------------------------------- */
+    .cart-review-list {
+      max-height: 50vh;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .review-item {
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .review-item:last-child { border-bottom: none; }
+
+    .review-item-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 10px;
+    }
+
+    .review-item-name {
+      font-size: 16px;
+      font-weight: bold;
+      color: var(--text-main);
+      word-break: break-word;
+    }
+
+    .review-item-spec {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .review-item-subtotal {
+      font-size: 16px;
+      font-weight: bold;
+      color: var(--accent-price);
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    .review-item-bottom {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .btn-remove {
+      background: none;
+      border: none;
+      color: var(--accent-price);
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      padding: 8px 10px;
+      text-decoration: underline;
+    }
+
+    .review-empty {
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 15px;
+      padding: 30px 0;
+    }
+
+    .cart-review-total {
+      display: flex;
+      justify-content: flex-end;
+      align-items: baseline;
+      gap: 8px;
+      font-size: 18px;
+      font-weight: bold;
+      color: var(--text-main);
+      padding: 14px 0;
+      border-top: 2px solid var(--border-color);
+      margin-top: 8px;
+    }
+
+    .cart-review-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 6px;
+    }
+
+    .cart-review-actions .btn-secondary,
+    .cart-review-actions .btn-submit {
+      flex: 1;
+      margin-top: 0;
+    }
+
+    .btn-secondary {
+      background-color: #FFFFFF;
+      color: var(--text-main);
+      border: 2px solid var(--border-color);
+      padding: 16px;
+      font-size: 18px;
+      font-weight: bold;
+      border-radius: 10px;
+      cursor: pointer;
+      margin-top: 10px;
+    }
+
+    .line-share-note {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin: 14px 0 8px;
+      line-height: 1.5;
+    }
+
+    .line-share-textarea {
+      font-size: 13px;
+      line-height: 1.5;
+      resize: vertical;
+      white-space: pre-wrap;
+    }
+
+    .order-success-reminder {
+      background-color: #FF9797;
+      color: #660000;
+      border-radius: 10px;
+      padding: 12px 16px;
+      font-size: 15px;
+      font-weight: 700;
+      text-align: center;
+      line-height: 1.5;
+      margin-bottom: 16px;
+    }
+
+    .line-share-friend-section {
+      margin-bottom: 16px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .btn-line-friend {
+      display: block;
+      width: 100%;
+      box-sizing: border-box;
+      text-align: center;
+      text-decoration: none;
+      background-color: #FFFFFF;
+      color: var(--text-main);
+      border: 2px solid var(--border-color);
+      padding: 14px;
+      font-size: 16px;
+      font-weight: bold;
+      border-radius: 10px;
+    }
+
+    .btn-line-friend:active {
+      background-color: #EDF2F7;
+    }
+
+    .btn-secondary:active {
+      background-color: #EDF2F7;
+    }
+
+    .btn-submit:disabled {
+      background-color: #E2E8F0;
+      color: #A0AEC0;
+      border-color: #CBD5E0;
+      cursor: not-allowed;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 頂部導覽區 (Header & 分類大 Tabs) -->
+  <header class="top-header-container">
+    <div class="header-title">
+      現鮮訂購單
+      <div class="header-contact-info">
+        <div>訂購電話：<b>0966-234-949</b></div>
+        <div>LINE：<b>@gym9092x</b></div>
+        <div>自取點：<b>新北市新莊區</b></div>
+      </div>
+      <div class="data-status" id="dataStatus">正在載入品項資料...</div>
+    </div>
+    <nav class="tab-nav" id="tabContainer">
+      <!-- 導覽頁籤將由 JS 自動根據「分類」生成 -->
+      <button class="tab-btn active">載入中...</button>
+    </nav>
+  </header>
+
+  <!-- 主內容區 (商品列表) -->
+  <main class="container">
+    <div class="notice-card">
+      <div><strong>運費規則：</strong>宅配滿 3,000 元免運費，未滿 3,000 元運費 200 元。</div>
+      <div><strong>全家店到店：</strong>滿 1,500 元免運費，未滿 1,500 元運費 99 元。</div>
+      <div>另有多項大包裝肉品、火鍋料，歡迎詢問。</div>
+    </div>
+    <div id="loading" class="loading-text">正在載入商品清單，請稍候...</div>
+    <div id="productList" class="product-list"></div>
+  </main>
+
+  <!-- 底部固定購物車列 -->
+  <footer class="cart-bar">
+    <div class="cart-summary">
+      <div class="cart-count" id="cartCount">已選 0 件商品</div>
+      <div class="cart-total" id="cartTotal">小計: $0</div>
+    </div>
+    <button class="btn-checkout" id="btnCheckout" disabled onclick="openCartReviewModal()">
+      下一步：填寫資料
+    </button>
+  </footer>
+
+  <!-- 訂購單內容與數量確認彈窗 Modal -->
+  <div class="modal-overlay" id="cartReviewModal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title">確認訂購內容</div>
+        <button class="btn-close" onclick="closeCartReviewModal()">&times;</button>
+      </div>
+
+      <div id="cartReviewList" class="cart-review-list"></div>
+      <div class="cart-review-total" id="cartReviewTotal">小計: $0</div>
+
+      <div class="cart-review-actions">
+        <button type="button" class="btn-secondary" onclick="closeCartReviewModal()">返回修改</button>
+        <button type="button" class="btn-submit" id="btnConfirmCart" onclick="confirmCartAndProceed()">確認無誤，下一步填寫資料</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 結帳填寫資料彈窗 Modal -->
+  <div class="modal-overlay" id="orderModal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title">填寫訂購人資訊</div>
+        <button class="btn-close" onclick="closeOrderModal()">&times;</button>
+      </div>
+
+      <form id="orderForm" onsubmit="handleFormSubmit(event)">
+        <div class="form-group">
+          <label>姓名 <span class="required">*</span></label>
+          <input type="text" id="custName" class="form-control" placeholder="請輸入姓名" required>
+        </div>
+
+        <div class="form-group">
+          <label>電話 <span class="required">*</span></label>
+          <input type="tel" id="custPhone" class="form-control" placeholder="例如：0912345678" required>
+        </div>
+
+        <div class="form-group">
+          <label>取貨方式 <span class="required">*</span></label>
+          <select id="deliveryMethod" class="form-control" required onchange="toggleAddressLabel()">
+            <option value="宅配">宅配到府</option>
+            <option value="全家店到店">全家店到店</option>
+            <option value="自取">現場自取</option>
+          </select>
+          <div class="shipping-hint" id="shippingHint">宅配滿 3,000 元免運費，未滿 3,000 元運費 200 元。</div>
+        </div>
+
+        <div class="form-group" id="addressGroup">
+          <label id="addressLabel">收件地址 <span class="required">*</span></label>
+          <input type="text" id="custAddress" class="form-control" placeholder="請輸入完整地址或全家門市" required>
+        </div>
+
+        <div class="form-group">
+          <label>備註事項</label>
+          <textarea id="custNote" class="form-control" rows="2" placeholder="如有特殊需求請在此註明"></textarea>
+        </div>
+
+        <button type="submit" class="btn-submit">確認送出（開啟 LINE）</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- 傳送訂單至 LINE 彈窗 Modal -->
+  <div class="modal-overlay" id="lineShareModal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title">傳送訂單給我們</div>
+        <button class="btn-close" onclick="closeLineShareModal()">&times;</button>
+      </div>
+
+      <div class="order-success-reminder" id="orderSuccessReminder" style="display:none;">
+        🔔 記得傳送訂單資訊至現鮮LINE@帳號，並跟專人確認出貨喔！
+      </div>
+
+      <div class="line-share-friend-section">
+        <div class="line-share-note">還沒加入我們的 LINE 好友嗎？請先點此加入（帳號：@gym9092x）：</div>
+        <a href="https://line.me/R/ti/p/@gym9092x" target="_blank" rel="noopener" class="btn-line-friend">加入 LINE 好友</a>
+      </div>
+
+      <button type="button" class="btn-submit" id="btnOpenLine">開啟 LINE 傳送訂單</button>
+
+      <div class="line-share-note">開啟後請在聊天對象中選擇我們，即可將以下訂單內容傳送過來。若無法自動開啟，請複製下方訂單內容，手動貼到與我們的 LINE 對話：</div>
+
+      <textarea id="lineShareText" class="form-control line-share-textarea" rows="8" readonly></textarea>
+
+      <button type="button" class="btn-secondary" id="btnCopyLineText" onclick="copyLineShareText()">複製訂單內容</button>
+    </div>
+  </div>
+
+  <script>
+    // ====================================================
+    // API URL 設定（已測試成功的 Google Apps Script Web App URL）
+    // ====================================================
+    const API_URL = "YOUR_GOOGLE_APPS_SCRIPT_URL";
+
+    // 業務與官方 LINE 資訊
+    const OFFICIAL_LINE_ID = "@gym9092x";
+    const PHONE_1 = "0966-234-949";
+
+    // 找不到 API 或連線失敗時顯示的備用品項資料
+    const FALLBACK_ITEMS = [
+      { category: "海鮮類", name: "藍鑽蝦(30/40)", spec: "1公斤/盒", price: 440 },
+      { category: "海鮮類", name: "中南美白蝦(20/30)", spec: "600克/盒", price: 190 },
+      { category: "海鮮類", name: "鱈魚(大比目魚)切片", spec: "400克/片", price: 260 },
+      { category: "海鮮類", name: "智利鮭魚切片", spec: "300克/片", price: 145 },
+      { category: "海鮮類", name: "鮭魚菲力切塊", spec: "200/300克", price: 125 },
+      { category: "海鮮類", name: "鮭魚碎肉", spec: "1公斤/包", price: 220 },
+      { category: "海鮮類", name: "虱目魚肚", spec: "160克/片", price: 100 },
+      { category: "海鮮類", name: "薄鹽挪威鯖魚", spec: "180/200克", price: 80 },
+      { category: "海鮮類", name: "金目鱸魚片", spec: "300/400克", price: 110 },
+      { category: "海鮮類", name: "藍鑽蝦仁30/40", spec: "150克＊3包", price: 460 },
+      { category: "海鮮類", name: "煙燻鮭魚", spec: "1公斤/包", price: 800 },
+      { category: "海鮮類", name: "煙燻鮭魚", spec: "100克/包", price: 140 },
+      { category: "海鮮類", name: "鯛魚腹片 5片", spec: "450克/包", price: 155 },
+      { category: "海鮮類", name: "生食級干貝 4S", spec: "1公斤/包", price: 1650 },
+      { category: "海鮮類", name: "生凍小捲 2排", spec: "約300克", price: 115 },
+      { category: "海鮮類", name: "小花枝60/80", spec: "1公斤/包", price: 220 },
+      { category: "海鮮類", name: "日本生食級碎干貝", spec: "1公斤/包", price: 1380 },
+      { category: "海鮮類", name: "冷凍帶殼鮑魚", spec: "1公斤/包", price: 350 },
+      { category: "湯品", name: "品元堂珍品佛跳牆", spec: "2公斤/盒", price: 280 },
+      { category: "湯品", name: "品元堂極品海鮮煲", spec: "2公斤/盒", price: 280 },
+      { category: "湯品", name: "品元堂鹿茸烏骨雞", spec: "2.2公斤/盒", price: 300 },
+      { category: "湯品", name: "品元堂開運人蔘雞", spec: "2.2公斤/盒", price: 300 },
+      { category: "湯品", name: "品元堂魷魚螺肉蒜", spec: "2公斤/盒", price: 300 },
+      { category: "湯品", name: "品元堂酸菜軟骨湯", spec: "1.2公斤/盒", price: 190 },
+      { category: "湯品", name: "南高雄羊肉爐", spec: "1.1公斤/包", price: 130 },
+      { category: "湯品", name: "品元堂麻辣藤椒牛三寶", spec: "700克/盒", price: 140 },
+      { category: "湯品", name: "紅龍牛肉湯", spec: "含湯450克/包", price: 75 },
+      { category: "解凍即食", name: "明太子風味泡菜", spec: "500克/包", price: 130 },
+      { category: "解凍即食", name: "品元堂日光地瓜", spec: "1公斤/包", price: 135 },
+      { category: "解凍即食", name: "涼拌毛豆莢", spec: "1公斤/包", price: 135 },
+      { category: "解凍即食", name: "原味毛豆莢", spec: "1公斤/包", price: 90 },
+      { category: "解凍即食", name: "瓜瓜園冰烤地瓜", spec: "1公斤/包", price: 135 },
+      { category: "解凍即食", name: "蓮藕切片", spec: "850克/包", price: 100 },
+      { category: "解凍即食", name: "張酥酥辣味/原味鳳爪", spec: "600克/包", price: 200 },
+      { category: "解凍即食", name: "溫泉蛋", spec: "10粒", price: 140 },
+      { category: "冷凍蔬菜", name: "冷凍青花菜", spec: "1公斤/包", price: 55 },
+      { category: "冷凍蔬菜", name: "冷凍紅蘿蔔丁", spec: "1公斤/包", price: 50 },
+      { category: "冷凍蔬菜", name: "冷凍玉米粒", spec: "1公斤/包", price: 80 },
+      { category: "冷凍蔬菜", name: "冷凍南瓜塊", spec: "1公斤/包", price: 120 },
+      { category: "冷凍蔬菜", name: "冷凍毛豆仁", spec: "1公斤/包", price: 145 },
+      { category: "冷凍蔬菜", name: "冷凍玉米筍", spec: "1公斤/包", price: 130 },
+      { category: "冷凍蔬菜", name: "冷凍菠菜", spec: "1公斤/包", price: 90 },
+      { category: "冷凍蔬菜", name: "冷凍秋葵", spec: "1公斤/包", price: 140 },
+      { category: "冷凍蔬菜", name: "冷凍馬鈴薯丁", spec: "1公斤/包", price: 65 },
+      { category: "其他", name: "品元堂飛魚卵/墨魚香腸 (5條)", spec: "300克/包", price: 170 },
+      { category: "其他", name: "品元堂炭烤肋排", spec: "700克/包", price: 230 },
+      { category: "其他", name: "品元堂港式蘿蔔糕", spec: "1.1公斤/包", price: 90 },
+      { category: "其他", name: "津谷滷大腸", spec: "1公斤/包", price: 280 },
+      { category: "其他", name: "紅龍檸檬雞柳條", spec: "1公斤/包", price: 170 },
+      { category: "其他", name: "紅龍雞塊", spec: "1公斤/包", price: 170 },
+      { category: "其他", name: "紅龍炸豬排", spec: "1公斤/包", price: 260 },
+      { category: "其他", name: "麥肯 洋蔥圈", spec: "2LB/包", price: 250 },
+      { category: "其他", name: "迷你銀絲卷", spec: "40克*50粒", price: 260 },
+      { category: "其他", name: "小芋香包", spec: "30克*40粒", price: 250 },
+      { category: "其他", name: "小奶皇包", spec: "30克*40粒", price: 250 },
+      { category: "其他", name: "小鬍子千層三星蔥餅 5片", spec: "600克/包", price: 120 },
+      { category: "其他", name: "品元堂青蔥抓餅", spec: "1.4公斤", price: 130 },
+      { category: "其他", name: "巧克力布朗尼", spec: "1公斤/包", price: 550 },
+      { category: "其他", name: "瓜瓜園 紫金/黃金 QQ球", spec: "1.8公斤/包", price: 230 },
+      { category: "其他", name: "千張月亮蝦餅", spec: "110克/包", price: 47 },
+      { category: "其他", name: "香雞城小肉豆", spec: "1公斤/包", price: 270 },
+      { category: "其他", name: "小美樂魷魚酥", spec: "500克/包", price: 190 },
+      { category: "其他", name: "小美樂香酥雞塊", spec: "500克/包", price: 190 },
+      { category: "其他", name: "小美樂土魠魚塊", spec: "1公斤/包", price: 330 },
+      { category: "其他", name: "御炸蝦球", spec: "500克/包", price: 250 },
+      { category: "其他", name: "綠野農莊鹹酥雞", spec: "1公斤/包", price: 300 },
+      { category: "其他", name: "卜蜂 大熱狗", spec: "1包10條", price: 130 },
+      { category: "其他", name: "裹粉大熱狗", spec: "10支/包", price: 150 },
+      { category: "其他", name: "台畜帶骨德式香腸（10入）", spec: "750克/包", price: 260 },
+      { category: "其他", name: "富統 德國香腸", spec: "20條/包", price: 255 },
+      { category: "其他", name: "富統 培根", spec: "1公斤/包", price: 240 },
+      { category: "其他", name: "富統 紹興酒香腸", spec: "1公斤/包", price: 340 },
+      { category: "其他", name: "藍鑽蝦水餃（24粒）", spec: "624克/盒", price: 270 },
+      { category: "其他", name: "鮮肉熟水餃-奇美", spec: "3公斤/包", price: 350 },
+      { category: "其他", name: "宏裕行-花枝漿/花枝蝦漿", spec: "1斤/包", price: 345 },
+      { category: "其他", name: "宏裕行-墨魚漿", spec: "1斤/包", price: 345 },
+      { category: "其他", name: "品元堂花枝漿", spec: "150克/包", price: 65 },
+      { category: "其他", name: "手工蛋餃", spec: "1公斤/包", price: 210 },
+      { category: "其他", name: "捷香鑫鑫腸", spec: "1公斤/包", price: 190 },
+      { category: "其他", name: "川島竹輪", spec: "560克/包", price: 120 },
+      { category: "其他", name: "貴妃蝦滑", spec: "120克/包", price: 90 },
+      { category: "其他", name: "魚卵貴妃蝦滑", spec: "120克/包", price: 75 },
+      { category: "其他", name: "鮮Q雞肉丸", spec: "1公斤/包", price: 200 },
+      { category: "其他", name: "韓濟魚板串", spec: "640克/包", price: 250 },
+      { category: "其他", name: "讚岐烏龍麵", spec: "240克*5片(包)", price: 130 },
+      { category: "其他", name: "王子麵 (滷味用)", spec: "40包/箱", price: 210 },
+      { category: "其他", name: "美國板腱牛排", spec: "1公斤", price: 520 },
+      { category: "其他", name: "美國板腱燒肉片", spec: "500克", price: 290 },
+      { category: "其他", name: "台灣梅花豬火鍋片", spec: "500克", price: 190 },
+      { category: "其他", name: "美國單骨帶骨牛小排", spec: "250克", price: 210 },
+      { category: "其他", name: "美國牛五花肉片", spec: "500克", price: 190 }
+    ];
+
+    // 全局資料狀態
+    let allProducts = [];      // 原始商品資料（已附加穩定的 _uid）
+    let categorizedData = {};  // 按分類整理後的商品
+    let cart = {};             // 購物車內容 { uid: { name, price, qty } }
+    let currentCategory = "";  // 當前選中的分類
+
+    // 初始化頁面
+    document.addEventListener("DOMContentLoaded", () => {
+      fetchProducts();
+      adjustHeaderSpacing();
+    });
+    window.addEventListener("resize", adjustHeaderSpacing);
+    window.addEventListener("resize", adjustTabAlignment);
+
+    // 頂部 Header 高度會依聯絡資訊是否換行而變動，動態校正內容區的留白，避免遮擋
+    function adjustHeaderSpacing() {
+      const header = document.querySelector(".top-header-container");
+      if (header) {
+        document.body.style.paddingTop = header.getBoundingClientRect().height + "px";
+      }
+    }
+
+    // 幫每筆商品附加穩定且唯一的 id，避免同名商品（例如兩種規格的煙燻鮭魚）互相覆蓋
+    function assignIds(items) {
+      return items.map((prod, idx) => ({ ...prod, _uid: "item-" + idx }));
+    }
+
+    // 1. 取得 Google 試算表商品資料（若失敗則改用備用資料，畫面不會壞）
+    async function fetchProducts() {
+      const loadingEl = document.getElementById("loading");
+      const statusEl = document.getElementById("dataStatus");
+
+      try {
+        const response = await fetch(API_URL, { cache: "no-store" });
+        if (!response.ok) throw new Error("HTTP " + response.status);
+        const data = await response.json();
+        if (data && data.error) throw new Error(data.error);
+
+        const items = Array.isArray(data) ? data : (data.items || data.products || []);
+        if (!Array.isArray(items) || items.length === 0) throw new Error("EMPTY_RESULT");
+
+        allProducts = assignIds(items);
+        statusEl.className = "data-status is-live";
+        statusEl.textContent = data.updatedAt
+          ? `已同步最新售價（${new Date(data.updatedAt).toLocaleString("zh-TW")}）`
+          : "已同步最新售價";
+      } catch (error) {
+        console.error("載入即時售價失敗，改用預設資料：", error);
+        allProducts = assignIds(FALLBACK_ITEMS);
+        statusEl.className = "data-status is-fallback";
+        statusEl.textContent = "無法連線至即時售價，顯示預設品項資料";
+      }
+
+      categorizeProducts();
+      renderTabs();
+      loadingEl.style.display = "none";
+      adjustHeaderSpacing();
+    }
+
+    // 將商品依照分類分組
+    function categorizeProducts() {
+      categorizedData = {};
+      allProducts.forEach(prod => {
+        const cat = prod.分類 || prod.category || "其他";
+        if (!categorizedData[cat]) {
+          categorizedData[cat] = [];
+        }
+        categorizedData[cat].push(prod);
+      });
+    }
+
+    // 2. 動態渲染頂部分類 Tabs
+    function renderTabs() {
+      const tabContainer = document.getElementById("tabContainer");
+      tabContainer.innerHTML = "";
+
+      const categories = Object.keys(categorizedData);
+      if (categories.length > 0) {
+        currentCategory = categories[0]; // 預設選中第一個分類
+      }
+
+      categories.forEach((cat, index) => {
+        const btn = document.createElement("button");
+        btn.className = `tab-btn ${index === 0 ? 'active' : ''}`;
+        btn.innerText = cat;
+        btn.onclick = () => switchTab(cat, btn);
+        tabContainer.appendChild(btn);
+      });
+
+      // 渲染預設分類商品
+      renderProductList();
+      adjustTabAlignment();
+    }
+
+    // 頁籤在容納得下時水平置中；若螢幕較窄導致頁籤需要橫向捲動，
+    // 則改回靠左對齊，避免置中造成第一個（預設選中的）頁籤被推到畫面外
+    function adjustTabAlignment() {
+      const nav = document.getElementById("tabContainer");
+      if (!nav) return;
+      nav.style.justifyContent = nav.scrollWidth > nav.clientWidth ? "flex-start" : "center";
+    }
+
+    // 切換分類 Tab
+    function switchTab(category, btnElement) {
+      currentCategory = category;
+
+      // 更新 Tab 樣式
+      document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+      btnElement.classList.add("active");
+
+      // 渲染該分類商品
+      renderProductList();
+    }
+
+    // 3. 渲染商品清單
+    function renderProductList() {
+      const listContainer = document.getElementById("productList");
+      listContainer.innerHTML = "";
+
+      const products = categorizedData[currentCategory] || [];
+
+      products.forEach(prod => {
+        const id = prod._uid;
+        const name = prod.名稱 || prod.name || "未命名商品";
+        const spec = prod.規格 || prod.spec || "";
+        const price = Number(prod.單價 || prod.price || 0);
+        const currentQty = cart[id] ? cart[id].qty : 0;
+
+        const itemEl = document.createElement("div");
+        itemEl.className = "product-item";
+        itemEl.innerHTML = `
+          <div class="product-info">
+            <div class="product-name">${escapeHtml(name)}</div>
+            ${spec ? `<div class="product-spec">規格：${escapeHtml(spec)}</div>` : ''}
+            <div class="product-price">$${price}</div>
+          </div>
+          <div class="quantity-control">
+            <button class="btn-qty" onclick="updateQuantity('${id}', '${escapeHtml(name)}', '${escapeHtml(spec)}', ${price}, -1)">-</button>
+            <span class="qty-display" id="qty-${id}">${currentQty}</span>
+            <button class="btn-qty" onclick="updateQuantity('${id}', '${escapeHtml(name)}', '${escapeHtml(spec)}', ${price}, 1)">+</button>
+          </div>
+        `;
+        listContainer.appendChild(itemEl);
+      });
+    }
+
+    // 更新數量（同時同步商品列表與訂購內容確認彈窗）
+    function updateQuantity(id, name, spec, price, change) {
+      if (!cart[id]) {
+        cart[id] = { name: name, spec: spec, price: price, qty: 0 };
+      }
+
+      cart[id].qty += change;
+
+      if (cart[id].qty <= 0) {
+        delete cart[id];
+      }
+
+      // 更新商品列表的數量顯示
+      const qtyDisplay = document.getElementById(`qty-${id}`);
+      if (qtyDisplay) {
+        qtyDisplay.innerText = cart[id] ? cart[id].qty : 0;
+      }
+
+      // 更新購物車統計
+      updateCartSummary();
+      // 同步訂購內容確認彈窗（若正在開啟中）
+      renderCartReview();
+    }
+
+    // 從購物車移除單一品項（訂購內容確認彈窗使用）
+    function removeCartItem(id) {
+      delete cart[id];
+
+      const qtyDisplay = document.getElementById(`qty-${id}`);
+      if (qtyDisplay) {
+        qtyDisplay.innerText = "0";
+      }
+
+      updateCartSummary();
+      renderCartReview();
+    }
+
+    // 更新購物車底部列狀態
+    function updateCartSummary() {
+      let totalCount = 0;
+      let totalPrice = 0;
+
+      Object.values(cart).forEach(item => {
+        totalCount += item.qty;
+        totalPrice += item.qty * item.price;
+      });
+
+      document.getElementById("cartCount").innerText = `已選 ${totalCount} 件商品`;
+      document.getElementById("cartTotal").innerText = `小計: $${totalPrice.toLocaleString()}`;
+
+      const btnCheckout = document.getElementById("btnCheckout");
+      btnCheckout.disabled = totalCount === 0;
+    }
+
+    // 依取貨方式與小計計算運費（對應官方公告的運費規則）
+    function calcShippingFee(deliveryMethod, subtotal) {
+      if (deliveryMethod === "自取") return 0;
+      if (deliveryMethod === "全家店到店") return subtotal >= 1500 ? 0 : 99;
+      return subtotal >= 3000 ? 0 : 200; // 宅配到府
+    }
+
+    function getSubtotal() {
+      let subtotal = 0;
+      Object.values(cart).forEach(item => { subtotal += item.qty * item.price; });
+      return subtotal;
+    }
+
+    // 4. Modal 控制
+
+    // 訂購內容與數量確認彈窗（第一步：點選「下一步：填寫資料」時先開啟）
+    function openCartReviewModal() {
+      if (Object.keys(cart).length === 0) return;
+      renderCartReview();
+      document.getElementById("cartReviewModal").classList.add("active");
+    }
+
+    function closeCartReviewModal() {
+      document.getElementById("cartReviewModal").classList.remove("active");
+    }
+
+    // 訂購內容確認無誤後才進入填寫訂購人資料
+    function confirmCartAndProceed() {
+      if (Object.keys(cart).length === 0) return;
+      closeCartReviewModal();
+      openOrderModal();
+    }
+
+    // 渲染訂購內容確認彈窗：品名、規格、數量、單價與小計，並可調整數量/刪除
+    function renderCartReview() {
+      const container = document.getElementById("cartReviewList");
+      const totalEl = document.getElementById("cartReviewTotal");
+      const confirmBtn = document.getElementById("btnConfirmCart");
+      if (!container || !totalEl) return;
+
+      const entries = Object.entries(cart);
+
+      if (entries.length === 0) {
+        container.innerHTML = `<div class="review-empty">尚未選擇任何商品，請返回選購。</div>`;
+        totalEl.textContent = "小計: $0";
+        if (confirmBtn) confirmBtn.disabled = true;
+        return;
+      }
+
+      let html = "";
+      let total = 0;
+
+      entries.forEach(([id, item]) => {
+        const subtotal = item.qty * item.price;
+        total += subtotal;
+        html += `
+          <div class="review-item">
+            <div class="review-item-top">
+              <div>
+                <div class="review-item-name">${escapeHtml(item.name)}</div>
+                <div class="review-item-spec">${item.spec ? `規格：${escapeHtml(item.spec)} · ` : ''}單價 $${item.price}</div>
+              </div>
+              <div class="review-item-subtotal">$${subtotal.toLocaleString()}</div>
+            </div>
+            <div class="review-item-bottom">
+              <div class="quantity-control">
+                <button class="btn-qty" onclick="updateQuantity('${id}', '${escapeHtml(item.name)}', '${escapeHtml(item.spec || '')}', ${item.price}, -1)">-</button>
+                <span class="qty-display">${item.qty}</span>
+                <button class="btn-qty" onclick="updateQuantity('${id}', '${escapeHtml(item.name)}', '${escapeHtml(item.spec || '')}', ${item.price}, 1)">+</button>
+              </div>
+              <button type="button" class="btn-remove" onclick="removeCartItem('${id}')">刪除</button>
+            </div>
+          </div>
+        `;
+      });
+
+      container.innerHTML = html;
+      totalEl.textContent = `小計: $${total.toLocaleString()}`;
+      if (confirmBtn) confirmBtn.disabled = false;
+    }
+
+    function openOrderModal() {
+      document.getElementById("orderModal").classList.add("active");
+      updateShippingHint();
+    }
+
+    function closeOrderModal() {
+      document.getElementById("orderModal").classList.remove("active");
+    }
+
+    function toggleAddressLabel() {
+      const method = document.getElementById("deliveryMethod").value;
+      const addrGroup = document.getElementById("addressGroup");
+      const addrLabel = document.getElementById("addressLabel");
+      const addrInput = document.getElementById("custAddress");
+
+      if (method === "自取") {
+        addrGroup.style.display = "none";
+        addrInput.removeAttribute("required");
+      } else {
+        addrGroup.style.display = "block";
+        addrInput.setAttribute("required", "required");
+        addrLabel.innerHTML = (method === "全家店到店")
+          ? `全家店到店門市名稱/店號 <span class="required">*</span>`
+          : `收件地址 <span class="required">*</span>`;
+      }
+
+      updateShippingHint();
+    }
+
+    function updateShippingHint() {
+      const method = document.getElementById("deliveryMethod").value;
+      const subtotal = getSubtotal();
+      const fee = calcShippingFee(method, subtotal);
+      const hintEl = document.getElementById("shippingHint");
+
+      if (method === "自取") {
+        hintEl.textContent = "現場自取，無運費。";
+      } else if (method === "全家店到店") {
+        hintEl.textContent = fee === 0
+          ? "已滿 1,500 元，全家店到店免運費！"
+          : `全家店到店未滿 1,500 元，運費 $${fee}（再訂 $${(1500 - subtotal).toLocaleString()} 即可免運）。`;
+      } else {
+        hintEl.textContent = fee === 0
+          ? "已滿 3,000 元，宅配免運費！"
+          : `宅配未滿 3,000 元，運費 $${fee}（再訂 $${(3000 - subtotal).toLocaleString()} 即可免運）。`;
+      }
+    }
+
+    // 5. 送出邏輯：組裝文字並開啟 LINE
+    // 產生唯一訂單編號，格式：ORD-YYYYMMDD-隨機4碼（例如 ORD-20260818-8A3F）
+    function generateOrderId() {
+      const now = new Date();
+      const y = now.getFullYear();
+      const m = String(now.getMonth() + 1).padStart(2, "0");
+      const d = String(now.getDate()).padStart(2, "0");
+      const chars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+      let rand = "";
+      for (let i = 0; i < 4; i++) {
+        rand += chars[Math.floor(Math.random() * chars.length)];
+      }
+      return `ORD-${y}${m}${d}-${rand}`;
+    }
+
+    async function handleFormSubmit(event) {
+      event.preventDefault();
+
+      const submitBtn = event.target.querySelector('button[type="submit"]');
+      const submitBtnOriginalText = submitBtn ? submitBtn.textContent : "";
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = "處理中，請稍候...";
+      }
+
+      const name = document.getElementById("custName").value.trim();
+      const phone = document.getElementById("custPhone").value.trim();
+      const delivery = document.getElementById("deliveryMethod").value;
+      const address = document.getElementById("custAddress").value.trim();
+      const note = document.getElementById("custNote").value.trim();
+      const orderId = generateOrderId();
+      const orderTime = new Date().toISOString();
+
+      // 計算總金額
+      const subtotal = getSubtotal();
+      let orderItemsText = "";
+
+      Object.values(cart).forEach((item, index) => {
+        const itemTotal = item.qty * item.price;
+        orderItemsText += `${index + 1}. ${item.name}\n   數量：${item.qty} | 小計：$${itemTotal}\n`;
+      });
+
+      const shippingFee = calcShippingFee(delivery, subtotal);
+      const grandTotal = subtotal + shippingFee;
+      const addressForRecord = delivery === "自取" ? "" : address;
+
+      // 組裝整齊格式化文字
+      let msg = `🛒【線上訂單內容通知】\n`;
+      msg += `🔖 訂單編號：${orderId}\n`;
+      msg += `-------------------------\n`;
+      msg += `👤 訂購人姓名：${name}\n`;
+      msg += `📞 聯絡電話：${phone}\n`;
+      msg += `🚚 取貨方式：${delivery}\n`;
+      if (delivery !== "自取") {
+        msg += `📍 地址/門市：${address}\n`;
+      }
+      if (note) {
+        msg += `📝 備註：${note}\n`;
+      }
+      msg += `-------------------------\n`;
+      msg += `📦 訂購明細：\n${orderItemsText}`;
+      msg += `-------------------------\n`;
+      msg += `💵 商品小計：$${subtotal.toLocaleString()}\n`;
+      msg += `🚚 預估運費：$${shippingFee}\n`;
+      msg += `💰 總計金額：$${grandTotal.toLocaleString()}\n`;
+      msg += `-------------------------\n`;
+      msg += `☎️ 業務專線：${PHONE_1}\n`;
+      msg += `💬 LINE：${OFFICIAL_LINE_ID}\n\n`;
+      msg += `請業務協助確認訂單與付款資訊，謝謝！`;
+
+      // 將完整訂單文字（含換行 \n、表情符號、全形符號等）一次性做 URL 編碼，
+      // 避免分段拼接時漏encode導致 LINE 網址格式錯誤
+      const encodedMsg = encodeURIComponent(msg);
+      const lineUrl = `https://line.me/R/msg/text/?${encodedMsg}`;
+
+      // 將訂單寫入 Google Sheets，並等待結果以決定是否顯示「記得傳送 LINE」提醒；
+      // 即使尚未部署後端 doPost 或寫入失敗，顧客仍可正常透過 LINE 送出訂單
+      // （只是不會看到成功提醒彈窗）
+      const backendResult = await submitOrderToBackend({
+        orderId,
+        orderTime,
+        name,
+        phone,
+        deliveryMethod: delivery,
+        address: addressForRecord,
+        items: Object.values(cart).map(item => ({
+          name: item.name,
+          spec: item.spec || "",
+          qty: item.qty,
+          price: item.price,
+          subtotal: item.qty * item.price
+        })),
+        subtotal,
+        shippingFee,
+        grandTotal,
+        note
+      });
+
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = submitBtnOriginalText;
+      }
+
+      // 關閉填寫資料 Modal，進入「傳送至 LINE」步驟；
+      // 後端成功建立訂單時，會在此步驟顯著提醒記得傳送 LINE 給我們
+      closeOrderModal();
+      showLineShareModal(msg, lineUrl, !!(backendResult && backendResult.success));
+    }
+
+    // 將訂單資料以 POST 方式寫入 Google Apps Script 後端。
+    // 注意：Content-Type 刻意使用 text/plain，避免瀏覽器對 Apps Script 發出
+    // CORS 預檢 (preflight OPTIONS) 請求而失敗；後端 doPost(e) 仍會將
+    // e.postData.contents 當作 JSON 字串解析。
+    async function submitOrderToBackend(orderPayload) {
+      const placeholder = "YOUR_GOOGLE_APPS_SCRIPT_URL";
+      if (!API_URL || API_URL === placeholder) return { success: false };
+
+      try {
+        const res = await fetch(API_URL, {
+          method: "POST",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify(orderPayload)
+        });
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        const data = await res.json();
+        return data && data.success ? data : { success: false };
+      } catch (err) {
+        console.error("訂單寫入後端資料庫失敗（不影響 LINE 傳送）：", err);
+        return { success: false, error: String(err.message || err) };
+      }
+    }
+
+    // 顯示「傳送至 LINE」步驟：提供開啟 LINE 的按鈕，同時一定顯示可複製的訂單文字作為備援。
+    // 說明：line.me/R/msg/text/ 屬於外部網址轉導，瀏覽器端 JS 無法偵測其伺服器是否回傳
+    // 400 等錯誤（例如網址過長、來源頁面不受信任等），因此不論自動開啟是否成功，
+    // 都同時提供文字內容供人工複製貼上，確保訂單一定能夠送達。
+    // showReminder：後端成功建立訂單時傳入 true，會在按鈕上方顯著提醒記得傳送 LINE 給我們。
+    function showLineShareModal(msg, lineUrl, showReminder) {
+      const textarea = document.getElementById("lineShareText");
+      if (textarea) textarea.value = msg;
+
+      const openBtn = document.getElementById("btnOpenLine");
+      if (openBtn) {
+        openBtn.onclick = () => window.open(lineUrl, "_blank", "noopener");
+      }
+
+      const reminderEl = document.getElementById("orderSuccessReminder");
+      if (reminderEl) {
+        reminderEl.style.display = showReminder ? "block" : "none";
+      }
+
+      document.getElementById("lineShareModal").classList.add("active");
+    }
+
+    function closeLineShareModal() {
+      document.getElementById("lineShareModal").classList.remove("active");
+    }
+
+    async function copyLineShareText() {
+      const textarea = document.getElementById("lineShareText");
+      const btn = document.getElementById("btnCopyLineText");
+      if (!textarea) return;
+
+      try {
+        await navigator.clipboard.writeText(textarea.value);
+      } catch (err) {
+        textarea.focus();
+        textarea.select();
+        document.execCommand("copy");
+      }
+
+      if (btn) {
+        const original = btn.textContent;
+        btn.textContent = "已複製！";
+        setTimeout(() => { btn.textContent = original; }, 2000);
+      }
+    }
+
+    // 工具函式：防範 HTML 注入
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+  </script>
+</body>
+</html>
